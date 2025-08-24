@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: whatsapp-bot-svc
+spec:
+  type: ClusterIP
+  selector:
+    app: whatsapp-bot
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
+      name: http
+---    
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: whatsapp-bot-http
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: "web"
+spec:
+  rules:
+    - host: whatsapp-bot.201.23.17.249.sslip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: whatsapp-bot-svc
+                port:
+                  number: 80
+    - host: whatsapp-bot.beloni.dev.br
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: whatsapp-bot-svc
+                port:
+                  number: 80

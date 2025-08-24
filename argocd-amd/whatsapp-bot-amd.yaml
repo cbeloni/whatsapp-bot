@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: whatsapp-bot
+  name: whatsapp-bot
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: whatsapp-bot
+  template:
+    metadata:
+      labels:
+        app: whatsapp-bot
+    spec:
+      containers:
+        - image: cbeloni/whatsapp-bot:amd64
+          imagePullPolicy: Always
+          name: whatsapp-bot
+          ports:
+            - containerPort: 8000
