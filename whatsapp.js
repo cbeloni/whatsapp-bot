@@ -4,6 +4,10 @@ const { MessageMedia } = require('whatsapp-web.js');
 const axios = require('axios');
 
 const client = new Client({
+    puppeteer: {
+        headless: true,
+        args: ["--no-sandbox"],
+    },
     authStrategy: new LocalAuth()
 });
 
@@ -19,14 +23,14 @@ client.on('ready', () => {
 });
 
 // Evento disparado quando uma mensagem é recebida
-client.on('message', message => {
-    console.log(`Mensagem recebida: ${message.body}`);
+// client.on('message', message => {
+//     console.log(`Mensagem recebida: ${message.body}`);
 
-    if (message.body.toLowerCase() === 'oi') {
-        message.reply('Olá!');
-        sendMessageToNumber('5511941503226', 'Olá! Esta é uma mensagem automática.');
-    }
-});
+//     if (message.body.toLowerCase() === 'oi') {
+//         message.reply('Olá!');
+//         sendMessageToNumber('5511941503226', 'Olá! Esta é uma mensagem automática.');
+//     }
+// });
 
 // Método para enviar uma mensagem para um número específico
 const sendMessageToNumber = async (number, message) => {
