@@ -32,15 +32,31 @@ client.on('ready', () => {
 //     }
 // });
 
-// Método para enviar uma mensagem para um número específico
+// client.on('message', async (message) => {
+//   const chat = await message.getChat();
+//   if (chat.isGroup) {
+//     console.log('ID do Grupo:', chat.id._serialized);
+//     // O ID também está disponível diretamente no objeto da mensagem
+//     // console.log('ID do Grupo (da mensagem):', message.from);
+//   }
+// });
+
+const montarId = (number) => {
+
+    
+    if (/^\d+$/.test(number)) {
+        return `${number}@s.whatsapp.net`
+    }
+    return `${number}`;
+}
+
 const sendMessageToNumber = async (number, message) => {
-    const chatId = `${number}@s.whatsapp.net`;
+    const chatId = montarId(number);
     return client.sendMessage(chatId, message)
 }
 
-// Método para enviar uma imagem para um número específico
 const sendImageToNumber = async (number, imageUrl, caption = '') => {
-    const chatId = `${number}@s.whatsapp.net`;
+    const chatId = montarId(number);
 
     try {
         const media = await MessageMedia.fromUrl(imageUrl);
