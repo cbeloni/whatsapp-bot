@@ -32,15 +32,6 @@ client.on('ready', () => {
 //     }
 // });
 
-// client.on('message', async (message) => {
-//   const chat = await message.getChat();
-//   if (chat.isGroup) {
-//     console.log('ID do Grupo:', chat.id._serialized);
-//     // O ID também está disponível diretamente no objeto da mensagem
-//     // console.log('ID do Grupo (da mensagem):', message.from);
-//   }
-// });
-
 const montarId = (number) => {
 
     
