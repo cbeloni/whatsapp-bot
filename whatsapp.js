@@ -11,6 +11,8 @@ const client = new Client({
     authStrategy: new LocalAuth()
 });
 
+let clientReady = false;
+
 // Evento disparado quando o QR Code é gerado
 client.on('qr', (qr) => {
     console.log('QR Code gerado. Escaneie com o WhatsApp.');
@@ -20,6 +22,7 @@ client.on('qr', (qr) => {
 // Evento disparado quando o cliente está pronto
 client.on('ready', () => {
     console.log('Cliente está pronto!');
+    clientReady = true;
 });
 
 // Evento disparado quando uma mensagem é recebida
@@ -42,11 +45,17 @@ const montarId = (number) => {
 }
 
 const sendMessageToNumber = async (number, message) => {
+    if (!clientReady) {
+        throw new Error('Cliente WhatsApp ainda não está pronto. Aguarde e tente novamente.');
+    }
     const chatId = montarId(number);
-    return client.sendMessage(chatId, message)
+    return client.sendMessage(chatId, message);
 }
 
 const sendImageToNumber = async (number, imageUrl, caption = '') => {
+    if (!clientReady) {
+        throw new Error('Cliente WhatsApp ainda não está pronto. Aguarde e tente novamente.');
+    }
     const chatId = montarId(number);
 
     try {
@@ -66,5 +75,6 @@ const initializeClient = () => {
 module.exports = {
     initializeClient,
     sendMessageToNumber,
-    sendImageToNumber
+    sendImageToNumber,
+    isClientReady: () => clientReady
 };
