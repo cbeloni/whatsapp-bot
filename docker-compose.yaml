@@ -8,4 +8,6 @@ services:
     container_name: whatsapp-bot
     ports:
       - "3000:3000"
+    volumes:
+      - ./.wwebjs_auth:/usr/src/app/.wwebjs_auth
     restart: unless-stopped
