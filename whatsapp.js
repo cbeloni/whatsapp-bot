@@ -18,6 +18,39 @@ const client = new Client({
 
 let clientReady = false;
 let initializing = false;
+let readyResolvers = [];
+
+const waitForReady = (timeoutMs = 45000) => new Promise((resolve, reject) => {
+    if (clientReady) {
+        resolve();
+        return;
+    }
+
+    const timeout = setTimeout(() => {
+        readyResolvers = readyResolvers.filter((fn) => fn !== onReady);
+        reject(new Error('Cliente WhatsApp ainda não ficou pronto dentro do tempo limite.'));
+    }, timeoutMs);
+
+    const onReady = () => {
+        clearTimeout(timeout);
+        resolve();
+    };
+
+    readyResolvers.push(onReady);
+});
+
+const resolveReadyWaiters = () => {
+    const resolvers = readyResolvers;
+    readyResolvers = [];
+    resolvers.forEach((fn) => fn());
+};
+
+const ensureClientReady = async () => {
+    if (!clientReady) {
+        initializeClient();
+        await waitForReady();
+    }
+};
 
 // Evento disparado quando o QR Code é gerado
 client.on('qr', (qr) => {
@@ -39,6 +72,7 @@ client.on('ready', () => {
     console.log('Cliente está pronto!');
     clientReady = true;
     initializing = false;
+    resolveReadyWaiters();
 });
 
 client.on('disconnected', (reason) => {
@@ -68,17 +102,13 @@ const montarId = (number) => {
 }
 
 const sendMessageToNumber = async (number, message) => {
-    if (!clientReady) {
-        throw new Error('Cliente WhatsApp ainda não está pronto. Aguarde e tente novamente.');
-    }
+    await ensureClientReady();
     const chatId = montarId(number);
     return client.sendMessage(chatId, message);
 }
 
 const sendImageToNumber = async (number, imageUrl, caption = '') => {
-    if (!clientReady) {
-        throw new Error('Cliente WhatsApp ainda não está pronto. Aguarde e tente novamente.');
-    }
+    await ensureClientReady();
     const chatId = montarId(number);
 
     try {
