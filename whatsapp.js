@@ -3,15 +3,21 @@ const qrcode = require('qrcode-terminal');
 const { MessageMedia } = require('whatsapp-web.js');
 const axios = require('axios');
 
+const AUTH_PATH = process.env.WWEBJS_AUTH_PATH || '.wwebjs_auth';
+
 const client = new Client({
     puppeteer: {
         headless: true,
-        args: ["--no-sandbox"],
+        args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
     },
-    authStrategy: new LocalAuth()
+    authStrategy: new LocalAuth({
+        clientId: process.env.WWEBJS_CLIENT_ID || 'main',
+        dataPath: AUTH_PATH
+    })
 });
 
 let clientReady = false;
+let initializing = false;
 
 // Evento disparado quando o QR Code é gerado
 client.on('qr', (qr) => {
@@ -19,10 +25,27 @@ client.on('qr', (qr) => {
     qrcode.generate(qr, { small: true });
 });
 
+client.on('authenticated', () => {
+    console.log('WhatsApp autenticado com sucesso.');
+});
+
+client.on('auth_failure', (message) => {
+    console.error('Falha na autenticação do WhatsApp:', message);
+    clientReady = false;
+});
+
 // Evento disparado quando o cliente está pronto
 client.on('ready', () => {
     console.log('Cliente está pronto!');
     clientReady = true;
+    initializing = false;
+});
+
+client.on('disconnected', (reason) => {
+    console.warn('WhatsApp desconectado:', reason);
+    clientReady = false;
+    initializing = false;
+    setTimeout(() => initializeClient(), 5000);
 });
 
 // Evento disparado quando uma mensagem é recebida
@@ -69,6 +92,11 @@ const sendImageToNumber = async (number, imageUrl, caption = '') => {
 
 // Inicializa o cliente
 const initializeClient = () => {
+    if (initializing) {
+        return;
+    }
+    initializing = true;
+    console.log(`Inicializando cliente WhatsApp (auth em: ${AUTH_PATH})...`);
     client.initialize();
 }
 
