@@ -26,7 +26,7 @@ function normalizeNumberToJid(number) {
 
 function startHttpServer(port = 3000) {
     const server = http.createServer((req, res) => {
-        if (req.method !== "POST" || req.url !== "/send-message") {
+        if (req.method !== "POST" || req.url !== "/sendmessage") {
             return sendJson(res, 404, { error: "Endpoint não encontrado" });
         }
 
@@ -79,7 +79,7 @@ function startHttpServer(port = 3000) {
 
     server.listen(port, () => {
         console.log(`API online em http://localhost:${port}`);
-        console.log("Endpoint: POST /send-message");
+        console.log("Endpoint: POST /sendmessage");
     });
 }
 
