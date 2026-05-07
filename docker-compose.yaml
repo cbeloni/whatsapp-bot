@@ -10,4 +10,5 @@ services:
       - "3000:3000"
     volumes:
       - ./.wwebjs_auth:/usr/src/app/.wwebjs_auth
+      - ./.baileys_auth:/usr/src/app/.baileys_auth
     restart: unless-stopped
