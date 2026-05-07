@@ -1,4 +1,7 @@
 .wwebjs_auth/
+.baileys_auth/
+auth_info/
 node_modules/
 .wwebjs_cache/
 .env
+.DS_Store
