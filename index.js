@@ -27,7 +27,18 @@ function sendJson(res, statusCode, payload) {
 }
 
 function normalizeNumberToJid(number) {
-    const digits = String(number || "").replace(/\D/g, "");
+    const value = String(number || "").trim();
+    if (!value) {
+        return null;
+    }
+
+    // Se já veio um JID válido (grupo/contato/lid), mantém como está.
+    if (value.includes("@")) {
+        return value.toLowerCase();
+    }
+
+    // Caso contrário, trata como número de telefone.
+    const digits = value.replace(/\D/g, "");
     if (!digits) {
         return null;
     }
