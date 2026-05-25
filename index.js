@@ -8,6 +8,9 @@ let makeWASocket;
 let useMultiFileAuthState;
 let DisconnectReason;
 let fetchLatestBaileysVersion;
+let reconnectTimeout = null;
+let reconnectAttempts = 0;
+let isConnecting = false;
 
 async function loadBaileys() {
     const baileys = await import("@whiskeysockets/baileys");
@@ -89,74 +92,106 @@ function startHttpServer(port = 3000) {
     });
 }
 
+function scheduleReconnect(reasonCode) {
+    if (reconnectTimeout) {
+        return;
+    }
+
+    reconnectAttempts += 1;
+    const baseDelayMs = reasonCode === 515 ? 8000 : 5000;
+    const delayMs = Math.min(baseDelayMs * reconnectAttempts, 60000);
+
+    console.log(
+        `Agendando reconexão em ${delayMs}ms (tentativa ${reconnectAttempts})`,
+    );
+
+    reconnectTimeout = setTimeout(() => {
+        reconnectTimeout = null;
+        connectToWhatsApp().catch((error) => {
+            console.error("Erro ao reconectar:", error);
+            scheduleReconnect();
+        });
+    }, delayMs);
+}
+
 async function connectToWhatsApp() {
+    if (isConnecting) {
+        return;
+    }
+    isConnecting = true;
+
     // 1. Gerencia o estado da autenticação (salva a sessão na pasta 'auth_info')
-    const { state, saveCreds } = await useMultiFileAuthState("auth_info");
+    try {
+        const { state, saveCreds } = await useMultiFileAuthState("auth_info");
 
-    // 2. Inicializa o Socket
-    const { version, isLatest } = await fetchLatestBaileysVersion();
-    console.log("Versão WA Web usada:", version, "| última:", isLatest);
+        // 2. Inicializa o Socket
+        const { version, isLatest } = await fetchLatestBaileysVersion();
+        console.log("Versão WA Web usada:", version, "| última:", isLatest);
 
-    const sock = makeWASocket({
-        auth: state,
-        version,
-        syncFullHistory: false,
-    });
-    sockInstance = sock;
+        const sock = makeWASocket({
+            auth: state,
+            version,
+            syncFullHistory: false,
+        });
+        sockInstance = sock;
 
-    // 3. Monitora a conexão
-    sock.ev.on("connection.update", (update) => {
-        const { connection, lastDisconnect, qr } = update;
+        // 3. Monitora a conexão
+        sock.ev.on("connection.update", (update) => {
+            const { connection, lastDisconnect, qr } = update;
 
-        if (qr) {
-            console.log("Escaneie o QR Code abaixo:");
-            qrcode.generate(qr, { small: true });
-        }
+            if (qr) {
+                console.log("Escaneie o QR Code abaixo:");
+                qrcode.generate(qr, { small: true });
+            }
 
-        if (connection === "close") {
-            isWhatsappReady = false;
-            const statusCode = new Boom(lastDisconnect?.error)?.output
-                ?.statusCode;
-            const shouldReconnect =
-                statusCode !== DisconnectReason.loggedOut && statusCode !== 405;
+            if (connection === "close") {
+                isWhatsappReady = false;
+                const statusCode = new Boom(lastDisconnect?.error)?.output
+                    ?.statusCode;
+                const shouldReconnect =
+                    statusCode !== DisconnectReason.loggedOut &&
+                    statusCode !== 405;
 
-            console.log(
-                "Conexão fechada devido a:",
-                lastDisconnect.error,
-                "| status:",
-                statusCode,
-                ", tentando reconectar:",
-                shouldReconnect,
-            );
-            if (statusCode === 405) {
                 console.log(
-                    "Sessão rejeitada (405). Apague a pasta auth_info e rode novamente para parear com novo QR.",
+                    "Conexão fechada devido a:",
+                    lastDisconnect?.error,
+                    "| status:",
+                    statusCode,
+                    ", tentando reconectar:",
+                    shouldReconnect,
                 );
+
+                if (statusCode === 405) {
+                    console.log(
+                        "Sessão rejeitada (405). Apague a pasta auth_info e rode novamente para parear com novo QR.",
+                    );
+                    return;
+                }
+
+                if (shouldReconnect) {
+                    scheduleReconnect(statusCode);
+                }
+            } else if (connection === "open") {
+                isWhatsappReady = true;
+                reconnectAttempts = 0;
+                console.log("Bot conectado com sucesso!");
+            }
+        });
+
+        // 4. Salva as credenciais sempre que atualizadas
+        sock.ev.on("creds.update", saveCreds);
+
+        // 5. Escuta mensagens recebidas
+        sock.ev.on("messages.upsert", async (m) => {
+            const msg = m?.messages?.[0];
+            if (!msg?.key || msg.key.fromMe || m.type !== "notify") {
                 return;
             }
 
-            if (shouldReconnect) {
-                setTimeout(() => {
-                    connectToWhatsApp();
-                }, 5000);
-            }
-        } else if (connection === "open") {
-            isWhatsappReady = true;
-            console.log("Bot conectado com sucesso!");
-        }
-    });
-
-    // 4. Salva as credenciais sempre que atualizadas
-    sock.ev.on("creds.update", saveCreds);
-
-    // 5. Escuta mensagens recebidas
-    sock.ev.on("messages.upsert", async (m) => {
-        const msg = m.messages[0];
-        if (!msg.key.fromMe && m.type === "notify") {
             const sender = msg.key.remoteJid;
             const text =
-                msg.message.conversation ||
-                msg.message.extendedTextMessage?.text;
+                msg.message?.conversation ||
+                msg.message?.extendedTextMessage?.text;
 
             console.log(`Mensagem de ${sender}: ${text}`);
 
@@ -166,14 +201,17 @@ async function connectToWhatsApp() {
                     text: "Olá! Sou um bot feito com Baileys. 🤖",
                 });
             }
-        }
-    });
+        });
+    } finally {
+        isConnecting = false;
+    }
 }
 
 async function bootstrap() {
     try {
         await loadBaileys();
-        startHttpServer(3001);
+        const port = Number(process.env.PORT || 8000);
+        startHttpServer(port);
         await connectToWhatsApp();
     } catch (error) {
         console.error("Falha ao iniciar o bot:", error);
