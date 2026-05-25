@@ -1,4 +1,5 @@
 const qrcode = require('qrcode-terminal');
+const { Boom } = require('@hapi/boom');
 const {
     default: makeWASocket,
     DisconnectReason,
@@ -8,6 +9,7 @@ const {
 } = require('@whiskeysockets/baileys');
 
 const AUTH_PATH = process.env.BAILEYS_AUTH_PATH || '.baileys_auth';
+const READY_TIMEOUT_MS = Number(process.env.BAILEYS_READY_TIMEOUT_MS || 180000);
 
 let sock = null;
 let clientReady = false;
@@ -15,7 +17,7 @@ let initializing = false;
 let readyResolvers = [];
 let reconnectTimeout = null;
 
-const waitForReady = (timeoutMs = 45000) => new Promise((resolve, reject) => {
+const waitForReady = (timeoutMs = READY_TIMEOUT_MS) => new Promise((resolve, reject) => {
     if (clientReady) {
         resolve();
         return;
@@ -119,11 +121,20 @@ const initializeClient = async () => {
                 clientReady = false;
                 initializing = false;
 
-                const statusCode = lastDisconnect?.error?.output?.statusCode;
-                const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+                const statusCode = new Boom(lastDisconnect?.error)?.output?.statusCode;
+                const shouldReconnect =
+                    statusCode !== DisconnectReason.loggedOut &&
+                    statusCode !== 405;
 
                 console.warn('Baileys desconectado:', statusCode || 'sem status');
-                if (!isLoggedOut) {
+                if (statusCode === 405) {
+                    console.warn(
+                        `Sessão Baileys rejeitada (405). Apague "${AUTH_PATH}" e autentique novamente pelo QR.`
+                    );
+                    return;
+                }
+
+                if (shouldReconnect) {
                     scheduleReconnect();
                 } else {
                     console.warn('Sessão Baileys deslogada. Gere novo QR para autenticar novamente.');

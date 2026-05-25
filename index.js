@@ -1,15 +1,21 @@
-const {
-    default: makeWASocket,
-    useMultiFileAuthState,
-    DisconnectReason,
-    fetchLatestBaileysVersion,
-} = require("@whiskeysockets/baileys");
 const { Boom } = require("@hapi/boom");
 const qrcode = require("qrcode-terminal");
 const http = require("http");
 
 let sockInstance = null;
 let isWhatsappReady = false;
+let makeWASocket;
+let useMultiFileAuthState;
+let DisconnectReason;
+let fetchLatestBaileysVersion;
+
+async function loadBaileys() {
+    const baileys = await import("@whiskeysockets/baileys");
+    makeWASocket = baileys.default;
+    useMultiFileAuthState = baileys.useMultiFileAuthState;
+    DisconnectReason = baileys.DisconnectReason;
+    fetchLatestBaileysVersion = baileys.fetchLatestBaileysVersion;
+}
 
 function sendJson(res, statusCode, payload) {
     res.writeHead(statusCode, { "Content-Type": "application/json" });
@@ -164,5 +170,15 @@ async function connectToWhatsApp() {
     });
 }
 
-startHttpServer(3001);
-connectToWhatsApp();
+async function bootstrap() {
+    try {
+        await loadBaileys();
+        startHttpServer(3001);
+        await connectToWhatsApp();
+    } catch (error) {
+        console.error("Falha ao iniciar o bot:", error);
+        process.exit(1);
+    }
+}
+
+bootstrap();
