@@ -232,7 +232,7 @@ async function connectToWhatsApp() {
 async function bootstrap() {
     try {
         await loadBaileys();
-        startHttpServer(3001);
+        startHttpServer(3000);
         await connectToWhatsApp();
     } catch (error) {
         console.error("Falha ao iniciar o bot:", error);
