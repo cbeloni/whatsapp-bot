@@ -1,6 +1,7 @@
 const { Boom } = require("@hapi/boom");
 const qrcode = require("qrcode-terminal");
 const http = require("http");
+const fs = require("fs/promises");
 
 let sockInstance = null;
 let isWhatsappReady = false;
@@ -114,6 +115,15 @@ function scheduleReconnect(reasonCode) {
     }, delayMs);
 }
 
+async function clearAuthState() {
+    try {
+        await fs.rm("auth_info", { recursive: true, force: true });
+        console.log("Sessão antiga removida em auth_info.");
+    } catch (error) {
+        console.error("Falha ao limpar auth_info:", error.message);
+    }
+}
+
 async function connectToWhatsApp() {
     if (isConnecting) {
         return;
@@ -168,6 +178,18 @@ async function connectToWhatsApp() {
                     return;
                 }
 
+                if (statusCode === 401) {
+                    console.log(
+                        "Sessão inválida (401). É necessário novo pareamento por QR Code.",
+                    );
+                    if (process.env.AUTO_CLEAR_AUTH_ON_401 === "true") {
+                        clearAuthState()
+                            .then(() => scheduleReconnect(statusCode))
+                            .catch(() => scheduleReconnect(statusCode));
+                    }
+                    return;
+                }
+
                 if (shouldReconnect) {
                     scheduleReconnect(statusCode);
                 }
@@ -210,8 +232,7 @@ async function connectToWhatsApp() {
 async function bootstrap() {
     try {
         await loadBaileys();
-        const port = Number(process.env.PORT || 8000);
-        startHttpServer(port);
+        startHttpServer(3001);
         await connectToWhatsApp();
     } catch (error) {
         console.error("Falha ao iniciar o bot:", error);
