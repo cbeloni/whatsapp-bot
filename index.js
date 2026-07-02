@@ -26,6 +26,26 @@ function sendJson(res, statusCode, payload) {
     res.end(JSON.stringify(payload));
 }
 
+function readJsonBody(req) {
+    return new Promise((resolve, reject) => {
+        let body = "";
+
+        req.on("data", (chunk) => {
+            body += chunk;
+        });
+
+        req.on("end", () => {
+            try {
+                resolve(JSON.parse(body || "{}"));
+            } catch (error) {
+                reject(new Error("JSON inválido no corpo da requisição"));
+            }
+        });
+
+        req.on("error", reject);
+    });
+}
+
 function normalizeNumberToJid(number) {
     const value = String(number || "").trim();
     if (!value) {
@@ -47,60 +67,100 @@ function normalizeNumberToJid(number) {
 
 function startHttpServer(port = 3000) {
     const server = http.createServer((req, res) => {
-        if (req.method !== "POST" || req.url !== "/sendmessage") {
+        const requestUrl = new URL(req.url, "http://localhost");
+
+        if (req.method !== "POST") {
             return sendJson(res, 404, { error: "Endpoint não encontrado" });
         }
 
-        let body = "";
-        req.on("data", (chunk) => {
-            body += chunk;
-        });
+        if (requestUrl.pathname !== "/sendmessage" && requestUrl.pathname !== "/sendimage") {
+            return sendJson(res, 404, { error: "Endpoint não encontrado" });
+        }
 
-        req.on("end", async () => {
-            try {
-                const parsed = JSON.parse(body || "{}");
-                const { number, message } = parsed;
-                const jid = normalizeNumberToJid(number);
+        readJsonBody(req)
+            .then(async (parsed) => {
+                try {
+                    const { number } = parsed;
+                    const jid = normalizeNumberToJid(number);
 
-                if (!jid) {
-                    return sendJson(res, 400, {
-                        error: "Campo 'number' é obrigatório",
+                    if (!jid) {
+                        return sendJson(res, 400, {
+                            error: "Campo 'number' é obrigatório",
+                        });
+                    }
+
+                    if (!sockInstance || !isWhatsappReady) {
+                        return sendJson(res, 503, {
+                            error: "WhatsApp não está conectado",
+                        });
+                    }
+
+                    if (requestUrl.pathname === "/sendmessage") {
+                        const { message } = parsed;
+
+                        if (!message || typeof message !== "string") {
+                            return sendJson(res, 400, {
+                                error: "Campo 'message' é obrigatório e deve ser texto",
+                            });
+                        }
+
+                        const result = await sockInstance.sendMessage(jid, {
+                            text: message,
+                        });
+
+                        return sendJson(res, 200, {
+                            success: true,
+                            to: jid,
+                            messageId: result?.key?.id || null,
+                        });
+                    }
+
+                    const { imageUrl, caption = "" } = parsed;
+
+                    if (!imageUrl || typeof imageUrl !== "string") {
+                        return sendJson(res, 400, {
+                            error: "Campo 'imageUrl' é obrigatório e deve ser uma URL",
+                        });
+                    }
+
+                    const result = await sockInstance.sendMessage(jid, {
+                        image: { url: imageUrl },
+                        caption,
+                    });
+
+                    return sendJson(res, 200, {
+                        success: true,
+                        to: jid,
+                        messageId: result?.key?.id || null,
+                        caption: caption || "",
+                    });
+                } catch (error) {
+                    if (error.message === "JSON inválido no corpo da requisição") {
+                        return sendJson(res, 400, {
+                            error: error.message,
+                        });
+                    }
+
+                    return sendJson(res, 500, {
+                        error:
+                            requestUrl.pathname === "/sendimage"
+                                ? "Falha ao enviar imagem"
+                                : "Falha ao enviar mensagem",
+                        details: error.message,
                     });
                 }
-
-                if (!message || typeof message !== "string") {
-                    return sendJson(res, 400, {
-                        error: "Campo 'message' é obrigatório e deve ser texto",
-                    });
-                }
-
-                if (!sockInstance || !isWhatsappReady) {
-                    return sendJson(res, 503, {
-                        error: "WhatsApp não está conectado",
-                    });
-                }
-
-                const result = await sockInstance.sendMessage(jid, {
-                    text: message,
+            })
+            .catch((error) => {
+                return sendJson(res, 400, {
+                    error: error.message,
                 });
-
-                return sendJson(res, 200, {
-                    success: true,
-                    to: jid,
-                    messageId: result?.key?.id || null,
-                });
-            } catch (error) {
-                return sendJson(res, 500, {
-                    error: "Falha ao enviar mensagem",
-                    details: error.message,
-                });
-            }
-        });
+            });
     });
 
     server.listen(port, () => {
         console.log(`API online em http://localhost:${port}`);
         console.log("Endpoint: POST /sendmessage");
+        console.log("Endpoint: POST /sendimage");
     });
 }
 
